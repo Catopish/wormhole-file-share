@@ -5,8 +5,20 @@ const MB = 1024 * 1024;
 const PAYLOAD_SIZE = 5 * MB;
 
 // One shared 5MB buffer reused for every request — avoids allocating
-// N × 5MB when firing 100 concurrent.
-const payload = crypto.getRandomValues(new Uint8Array(PAYLOAD_SIZE));
+// N × 5MB when firing 100 concurrent. Built lazily on first run:
+// crypto.getRandomValues throws above 65536 bytes, so fill in chunks. (The
+// bytes don't need to be random for a load test — zeros are fine — but we
+// fill once to be representative.)
+let payload = null;
+function getPayload() {
+  if (payload) return payload;
+  payload = new Uint8Array(PAYLOAD_SIZE);
+  const CHUNK = 65536;
+  for (let off = 0; off < PAYLOAD_SIZE; off += CHUNK) {
+    crypto.getRandomValues(payload.subarray(off, Math.min(off + CHUNK, PAYLOAD_SIZE)));
+  }
+  return payload;
+}
 
 export default function Burst() {
   const [concurrency, setConcurrency] = useState(50);
@@ -25,6 +37,7 @@ export default function Burst() {
     setEc2Seen(false);
     setElapsed(0);
 
+    const bytes = getPayload();
     const start = performance.now();
     const timer = setInterval(
       () => setElapsed((performance.now() - start) / 1000),
@@ -37,7 +50,7 @@ export default function Burst() {
     async function worker() {
       while (!abortRef.current && performance.now() - start < RUN_MS) {
         try {
-          const node = await benchmark(payload);
+          const node = await benchmark(bytes);
           setTotal((t) => t + 1);
           setCounts((c) => ({ ...c, [key(node)]: c[key(node)] + 1 }));
           if (node === "ec2") setEc2Seen(true);
