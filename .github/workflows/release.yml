@@ -1,14 +1,14 @@
 name: release
 
-# Build and publish the backend image to GHCR on version tags (e.g. v0.1.0).
-# EC2 burst instances pull this image instead of compiling from source.
+# Build and publish the backend + autoscaler images to GHCR on version tags.
+# The homelab/EC2 backends and the VPS autoscaler pull these instead of
+# compiling from source (the VPS can't build the AWS SDK without OOMing).
 on:
   push:
     tags: ["v*"]
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/wormhole-backend
 
 jobs:
   publish:
@@ -16,6 +16,9 @@ jobs:
     permissions:
       contents: read
       packages: write # allow pushing to GHCR with the built-in token
+    strategy:
+      matrix:
+        component: [backend, autoscaler]
     steps:
       - uses: actions/checkout@v4
 
@@ -31,7 +34,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/wormhole-${{ matrix.component }}
           tags: |
             type=semver,pattern={{version}}
             type=sha
@@ -43,7 +46,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: ./${{ matrix.component }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
