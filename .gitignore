@@ -1,0 +1,27 @@
+# Rust
+target/
+**/*.rs.bk
+*.pdb
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+*.local
+
+# Env & secrets — never commit creds
+.env
+.env.*
+!.env.example
+*.age
+!secrets/*.age.pub
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local dev data
+minio-data/
+redis-data/
