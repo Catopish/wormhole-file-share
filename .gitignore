@@ -25,3 +25,4 @@ dist/
 # Local dev data
 minio-data/
 redis-data/
+/deploy/ec2-userdata.sh

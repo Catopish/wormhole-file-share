@@ -37,6 +37,33 @@ pub async fn metrics(State(state): State<AppState>) -> impl IntoResponse {
     format!("inflight {inflight}\n")
 }
 
+// Load-test endpoint for the burst simulator. Registers in-flight load exactly
+// like a real upload (so the autoscaler bursts), but DRAINS AND DISCARDS the
+// body — nothing is written to S3 or Redis. Reports which node served it so the
+// UI can show homelab-vs-ec2 split. Rate-limited per IP to blunt abuse.
+pub async fn benchmark(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Body,
+) -> Result<Response, ApiError> {
+    let _guard = InflightGuard::new(&state);
+
+    store::check_benchmark_limit(&state, &client_ip(&headers)).await?;
+
+    // Drain the body (up to the cap) and throw it away — this exercises the
+    // network path and holds the connection, without persisting anything.
+    let _ = axum::body::to_bytes(body, state.cfg.max_upload_bytes as usize)
+        .await
+        .map_err(|_| ApiError::TooLarge)?;
+
+    let node = state.cfg.node_name.clone();
+    Ok((
+        [("x-served-by", node.clone())],
+        Json(json!({ "served_by": node })),
+    )
+        .into_response())
+}
+
 // Client sends the opaque bits as headers; the body is the raw ciphertext
 // stream. The server understands none of it.
 pub async fn upload(

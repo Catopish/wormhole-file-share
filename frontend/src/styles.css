@@ -132,3 +132,48 @@ button.primary:focus-visible { outline: 2px solid var(--accent-ink); outline-off
   line-height: 1.5; border-top: 1px solid var(--line); padding-top: 16px;
 }
 .note b { color: var(--ink-soft); }
+
+/* --- burst simulator --- */
+.footlinks { text-align: center; margin-top: 26px; font-family: var(--mono); font-size: 0.8rem; }
+.footlinks a { color: var(--ink-faint); text-decoration: none; }
+.footlinks a:hover { color: var(--accent-ink); }
+
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+.burst-flag {
+  margin-top: 18px; text-align: center; font-family: var(--mono);
+  font-size: 0.95rem; letter-spacing: 0.06em; padding: 12px; border-radius: 9px;
+  background: var(--sunken); color: var(--ink-faint); border: 1px solid var(--line);
+  transition: all .3s ease;
+}
+.burst-flag.on {
+  background: var(--accent-wash); color: var(--accent-ink);
+  border-color: var(--accent); font-weight: 700;
+}
+
+.burst-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 16px 0 12px;
+}
+.burst-stats > div {
+  background: var(--sunken); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 8px; text-align: center;
+}
+.burst-stats .num {
+  display: block; font-family: var(--mono); font-size: 1.4rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+}
+.burst-stats .num.homelab { color: var(--ink-soft); }
+.burst-stats .num.ec2 { color: var(--accent-ink); }
+.burst-stats .num.fail { color: var(--danger); }
+.burst-stats .lbl {
+  display: block; font-family: var(--mono); font-size: 0.68rem;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin-top: 4px;
+}
+
+.splitbar {
+  display: flex; height: 14px; border-radius: 7px; overflow: hidden;
+  background: var(--sunken); border: 1px solid var(--line);
+}
+.splitbar .seg { transition: width .3s ease; }
+.splitbar .seg.homelab { background: var(--ink-faint); }
+.splitbar .seg.ec2 { background: var(--accent); }

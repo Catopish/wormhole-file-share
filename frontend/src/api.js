@@ -34,6 +34,21 @@ export async function download(id) {
   return res.arrayBuffer();
 }
 
+// Load-test request. Sends `bytes` to the drain-and-discard endpoint and
+// returns which node served it ("homelab" / "ec2"). Nothing is stored.
+export async function benchmark(bytes) {
+  const res = await fetch(`${BASE}/benchmark`, {
+    method: "POST",
+    headers: { "content-type": "application/octet-stream" },
+    body: bytes,
+  });
+  if (res.status === 429) throw new Error("rate limited");
+  if (!res.ok) throw new Error(`benchmark failed (${res.status})`);
+  const served =
+    res.headers.get("x-served-by") || (await res.json()).served_by || "unknown";
+  return served;
+}
+
 async function errMsg(res) {
   try {
     const j = await res.json();

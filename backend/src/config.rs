@@ -9,6 +9,9 @@ pub struct Config {
     pub max_upload_bytes: u64,
     pub lookup_limit: u32,
     pub lookup_window_secs: u64,
+    // Which node this is ("homelab" / "ec2"), reported via X-Served-By so the
+    // burst simulator can see which backend answered.
+    pub node_name: String,
 }
 
 impl Config {
@@ -21,6 +24,7 @@ impl Config {
             max_upload_bytes: parse("WH_MAX_UPLOAD_BYTES", 100 * 1024 * 1024),
             lookup_limit: parse("WH_LOOKUP_LIMIT", 20) as u32,
             lookup_window_secs: parse("WH_LOOKUP_WINDOW_SECS", 60),
+            node_name: env::var("WH_NODE_NAME").unwrap_or_else(|_| "unknown".into()),
         }
     }
 }

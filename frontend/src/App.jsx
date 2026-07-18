@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Send from "./Send.jsx";
 import Receive from "./Receive.jsx";
+import Burst from "./Burst.jsx";
 
 export default function App() {
   const [tab, setTab] = useState("send");
@@ -8,7 +9,7 @@ export default function App() {
     <div className="shell">
       <div className="brand">
         <span className="dot" />
-        <h1>wormhole<span className="tld">.dwiesta.pro</span></h1>
+        <h1>wormhole<span className="tld">&nbsp;· share.dwiesta.pro</span></h1>
       </div>
       <p className="tagline">
         Send a file with a phrase. It's encrypted before it leaves your browser,
@@ -30,9 +31,22 @@ export default function App() {
         >
           receive
         </button>
+        <button
+          role="tab"
+          aria-selected={tab === "burst"}
+          onClick={() => setTab("burst")}
+        >
+          burst
+        </button>
       </div>
 
-      {tab === "send" ? <Send /> : <Receive />}
+      {tab === "send" && <Send />}
+      {tab === "receive" && <Receive />}
+      {tab === "burst" && <Burst />}
+
+      <p className="footlinks">
+        <a href="/docs/">architecture &amp; how it works →</a>
+      </p>
     </div>
   );
 }

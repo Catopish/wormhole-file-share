@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>wormhole · architecture — share.dwiesta.pro</title>
+<style>
+  :root {
+    /* cool near-black terminal ground with slight cyan bias */
+    --bg:        #f6f8f7;
+    --bg-panel:  #ffffff;
+    --bg-sunken: #eef1f0;
+    --ink:       #12181a;
+    --ink-soft:  #45514f;
+    --ink-faint: #6d7a77;
+    --line:      #d9e0dd;
+    --line-soft: #e7ecea;
+    --accent:    #0f9d8f;   /* dialed-down cyan-teal: the "secure channel" */
+    --accent-ink:#0b7d72;
+    --accent-wash:#e2f4f1;
+    --warn:      #b26a00;   /* amber: honest tradeoffs */
+    --warn-wash: #fbf0dd;
+    --danger:    #b23b3b;
+    --danger-wash:#f8e6e4;
+    --good:      #2f8f57;
+
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, "Cascadia Code", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+    --measure: 68ch;
+    --r: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #0d1114;
+      --bg-panel:  #141a1e;
+      --bg-sunken: #0a0e10;
+      --ink:       #e6ecea;
+      --ink-soft:  #a7b3b0;
+      --ink-faint: #74807d;
+      --line:      #232d31;
+      --line-soft: #1a2225;
+      --accent:    #34d3c1;
+      --accent-ink:#5ee0d1;
+      --accent-wash:#0f2320;
+      --warn:      #e6ad55;
+      --warn-wash: #2a2113;
+      --danger:    #e58a86;
+      --danger-wash:#2a1715;
+      --good:      #64c489;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#f6f8f7; --bg-panel:#ffffff; --bg-sunken:#eef1f0;
+    --ink:#12181a; --ink-soft:#45514f; --ink-faint:#6d7a77;
+    --line:#d9e0dd; --line-soft:#e7ecea;
+    --accent:#0f9d8f; --accent-ink:#0b7d72; --accent-wash:#e2f4f1;
+    --warn:#b26a00; --warn-wash:#fbf0dd; --danger:#b23b3b; --danger-wash:#f8e6e4; --good:#2f8f57;
+  }
+  :root[data-theme="dark"] {
+    --bg:#0d1114; --bg-panel:#141a1e; --bg-sunken:#0a0e10;
+    --ink:#e6ecea; --ink-soft:#a7b3b0; --ink-faint:#74807d;
+    --line:#232d31; --line-soft:#1a2225;
+    --accent:#34d3c1; --accent-ink:#5ee0d1; --accent-wash:#0f2320;
+    --warn:#e6ad55; --warn-wash:#2a2113; --danger:#e58a86; --danger-wash:#2a1715; --good:#64c489;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- header ---------- */
+  header.masthead {
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(120% 140% at 85% -20%, var(--accent-wash) 0%, transparent 55%);
+  }
+  .masthead .wrap { padding-top: 64px; padding-bottom: 52px; }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 22px;
+  }
+  .kicker .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-wash);
+  }
+  h1 {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: clamp(2.3rem, 6vw, 3.5rem);
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+  h1 .tld { color: var(--ink-faint); font-weight: 500; }
+  .standfirst {
+    font-size: clamp(1.05rem, 2.4vw, 1.28rem);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 60ch;
+    margin: 0;
+    text-wrap: pretty;
+  }
+  .metastrip {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-top: 30px;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    padding: 5px 11px;
+    border: 1px solid var(--line);
+    border-radius: 100px;
+    background: var(--bg-panel);
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .chip b { color: var(--accent-ink); font-weight: 600; }
+
+  /* ---------- sections ---------- */
+  main .wrap { padding-top: 8px; padding-bottom: 8px; }
+  section { padding: 46px 0; border-bottom: 1px solid var(--line-soft); }
+  section:last-of-type { border-bottom: 0; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 8px;
+  }
+  h2 {
+    font-size: clamp(1.5rem, 3.4vw, 2rem);
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+  h3 {
+    font-size: 1.16rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 32px 0 10px;
+  }
+  p { max-width: var(--measure); margin: 0 0 16px; }
+  p.lead { font-size: 1.08rem; color: var(--ink-soft); }
+  a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  strong { font-weight: 680; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--bg-sunken);
+    border: 1px solid var(--line-soft);
+    padding: 1px 5px;
+    border-radius: 5px;
+  }
+
+  /* ---------- the core claim panel ---------- */
+  .claim {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--r);
+    padding: 26px 28px;
+    margin: 8px 0 4px;
+  }
+  .claim .big {
+    font-size: 1.22rem;
+    line-height: 1.45;
+    font-weight: 600;
+    margin: 0;
+    max-width: 58ch;
+  }
+  .claim .big em { color: var(--accent-ink); font-style: normal; }
+
+  /* ---------- terminal crypto flow ---------- */
+  figure.term {
+    margin: 24px 0 8px;
+    border-radius: var(--r);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: var(--bg-sunken);
+    box-shadow: 0 1px 0 var(--line-soft);
+  }
+  .term-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+  .term-bar .lights { display: flex; gap: 6px; }
+  .term-bar .lights i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .l1 { background: #e06c65; } .l2 { background: #e3b341; } .l3 { background: #3fb950; }
+  .term-bar .title { margin-left: 6px; letter-spacing: 0.04em; }
+  .term-body {
+    padding: 18px 20px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    line-height: 1.85;
+  }
+  .term-body pre { margin: 0; }
+  .cm { color: var(--ink-faint); }        /* comment */
+  .kw { color: var(--accent-ink); font-weight: 600; }  /* function / verb */
+  .vr { color: var(--ink); }              /* variable */
+  .ar { color: var(--warn); }             /* arrow / flow */
+  .st { color: var(--good); }             /* safe-to-send annotation */
+
+  /* ---------- who-can-decrypt table ---------- */
+  .table-scroll { overflow-x: auto; margin: 10px 0; border-radius: var(--r); border: 1px solid var(--line); }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; background: var(--bg-panel); }
+  th, td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  thead th {
+    font-family: var(--mono);
+    font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 600;
+    background: var(--bg-sunken);
+    border-bottom: 1px solid var(--line);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td:first-child { font-family: var(--mono); font-size: 13.5px; color: var(--ink); white-space: nowrap; }
+  .yes { color: var(--good); font-weight: 600; }
+  .no  { color: var(--danger); font-weight: 600; }
+  .verdict { font-weight: 600; }
+
+  /* ---------- component grid ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 8px 0; }
+  .card {
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 18px 18px 20px;
+  }
+  .card .role {
+    font-family: var(--mono);
+    font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent-ink); margin-bottom: 8px;
+  }
+  .card h4 { font-size: 1.05rem; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .card p { font-size: 14.5px; color: var(--ink-soft); margin: 0; max-width: none; }
+
+  /* ---------- honest tradeoff callout ---------- */
+  .note {
+    border-radius: var(--r);
+    padding: 18px 20px 18px 46px;
+    margin: 20px 0;
+    position: relative;
+    font-size: 15.5px;
+    line-height: 1.55;
+    background: var(--warn-wash);
+    border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  }
+  .note::before {
+    content: "!";
+    position: absolute; left: 16px; top: 17px;
+    font-family: var(--mono); font-weight: 700;
+    color: var(--warn);
+    width: 20px; height: 20px; line-height: 20px; text-align: center;
+    border: 1.5px solid var(--warn); border-radius: 50%;
+    font-size: 12px;
+  }
+  .note b { color: var(--warn); }
+  .note p { max-width: none; margin: 0 0 8px; }
+  .note p:last-child { margin: 0; }
+
+  /* ---------- phases ---------- */
+  ol.phases { list-style: none; counter-reset: ph; padding: 0; margin: 8px 0; max-width: var(--measure); }
+  ol.phases li {
+    counter-increment: ph;
+    position: relative;
+    padding: 14px 0 14px 56px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  ol.phases li:last-child { border-bottom: 0; }
+  ol.phases li::before {
+    content: counter(ph, decimal-leading-zero);
+    position: absolute; left: 0; top: 14px;
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    color: var(--accent-ink);
+    background: var(--accent-wash);
+    width: 38px; height: 26px; line-height: 26px; text-align: center;
+    border-radius: 6px;
+  }
+  ol.phases .pt { font-weight: 650; }
+  ol.phases .pd { color: var(--ink-soft); font-size: 15px; }
+  ol.phases .tag {
+    font-family: var(--mono); font-size: 11px; color: var(--accent-ink);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+    border-radius: 100px; padding: 1px 8px; margin-left: 8px; white-space: nowrap;
+  }
+
+  /* ---------- ascii diagram block ---------- */
+  .diagram {
+    background: var(--bg-sunken);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 20px;
+    overflow-x: auto;
+    margin: 16px 0;
+  }
+  .diagram pre {
+    margin: 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+    color: var(--ink-soft);
+    min-width: 560px;
+  }
+  .diagram pre b { color: var(--accent-ink); font-weight: 600; }
+  .diagram pre .mut { color: var(--ink-faint); }
+
+  ul.clean { max-width: var(--measure); padding-left: 20px; }
+  ul.clean li { margin: 6px 0; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 30px 0 60px;
+    color: var(--ink-faint);
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+  @media (max-width: 560px) {
+    body { font-size: 16px; }
+    section { padding: 36px 0; }
+    ol.phases li { padding-left: 48px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .chip, .card { transition: border-color .18s ease; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="kicker"><span class="dot"></span> Architecture&nbsp;·&nbsp;zero-knowledge file sharing</div>
+    <h1>wormhole<span class="tld">&nbsp;· share.dwiesta.pro</span></h1>
+    <p class="standfirst">A wormhole-style file drop where the four-word phrase is the only key —
+      it never leaves the browser, so the servers, the storage, and the operator all hold nothing but ciphertext.
+      Homelab carries the baseline load for free; AWS is rented only when the pipe is full.</p>
+    <div class="metastrip">
+      <span class="chip"><b>client-side</b> AES-256-GCM</span>
+      <span class="chip"><b>Argon2id</b> KDF</span>
+      <span class="chip">Rust · <b>Axum</b></span>
+      <span class="chip">Redis · <b>TTL 24h</b></span>
+      <span class="chip">private <b>S3</b></span>
+      <span class="chip">NixOS · <b>nginx</b></span>
+      <span class="chip">homelab → <b>EC2 burst</b></span>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+
+  <section id="thesis">
+    <p class="eyebrow">The property</p>
+    <h2>The four words are the whole secret</h2>
+    <p class="lead">Everything follows from one rule: the encryption key is derived from the mnemonic
+      <em>in the browser</em>, and the words are never transmitted. Upload sends ciphertext and a one-way
+      hash; download re-derives the key from the same words locally. No component in the middle can read a file —
+      including the person who runs it.</p>
+
+    <div class="claim">
+      <p class="big">The plaintext exists in exactly two places: the sender's tab and the recipient's tab.
+        The backend is a <em>ciphertext pipe</em>, Redis holds an <em>anonymous hash → opaque pointer</em>,
+        and S3 stores <em>encrypted blobs</em>. Lose the words and the file is gone — by design, there is no recovery.</p>
+    </div>
+  </section>
+
+  <section id="flow">
+    <p class="eyebrow">Crypto flow</p>
+    <h2>What the browser does, and what it hands over</h2>
+    <p>The distinctive work all happens client-side. The server only ever receives the green-annotated
+      values below — a lookup handle, a public salt, and an encrypted stream.</p>
+
+    <figure class="term">
+      <div class="term-bar">
+        <span class="lights"><i class="l1"></i><i class="l2"></i><i class="l3"></i></span>
+        <span class="title">browser · upload</span>
+      </div>
+      <div class="term-body"><pre><span class="cm"># all local — nothing below leaves the tab unless marked "→ server"</span>
+<span class="vr">words</span>   = <span class="kw">generate</span>(6)                 <span class="cm"># 6 words from a large wordlist</span>
+<span class="vr">salt</span>    = <span class="kw">random</span>(16)                  <span class="st">→ server  (public, not secret)</span>
+<span class="vr">key</span>     = <span class="kw">Argon2id</span>(words, salt)      <span class="cm"># slow-by-design, per guess</span>
+<span class="vr">id</span>      = <span class="kw">SHA-256</span>(words)            <span class="st">→ server  (one-way handle)</span>
+<span class="vr">blob</span>    = <span class="kw">AES-256-GCM</span>(file,     key) <span class="st">→ server  (streamed ciphertext)</span>
+<span class="vr">encName</span> = <span class="kw">AES-256-GCM</span>(filename, key) <span class="st">→ server  (name is hidden too)</span>
+
+<span class="cm"># server then stores:</span>
+<span class="ar">Redis[id]</span> <span class="ar">=</span> { s3_key, salt, encName, size, expires }   <span class="cm">EX 86400</span>
+<span class="ar">S3[s3_key]</span> <span class="ar">=</span> blob                                    <span class="cm"># private bucket</span></pre></div>
+    </figure>
+
+    <figure class="term">
+      <div class="term-bar">
+        <span class="lights"><i class="l1"></i><i class="l2"></i><i class="l3"></i></span>
+        <span class="title">browser · download</span>
+      </div>
+      <div class="term-body"><pre><span class="vr">words</span>    = <span class="kw">prompt</span>()                      <span class="cm"># recipient types the 6 words</span>
+<span class="vr">id</span>       = <span class="kw">SHA-256</span>(words)            <span class="st">→ server</span>  <span class="ar">→</span> { s3_key, salt, encName }
+<span class="vr">key</span>      = <span class="kw">Argon2id</span>(words, salt)
+<span class="vr">filename</span> = <span class="kw">decrypt</span>(encName, key)       <span class="cm"># local</span>
+<span class="vr">file</span>     = <span class="kw">decrypt</span>(<span class="kw">stream</span>(S3), key)    <span class="cm"># local — server never sees key</span></pre></div>
+    </figure>
+  </section>
+
+  <section id="who-knows">
+    <p class="eyebrow">Threat surface</p>
+    <h2>Who can actually decrypt a file</h2>
+    <p>The honest test of a zero-knowledge claim is a per-component audit. Compromise any single row
+      below — even the operator — and the plaintext still doesn't fall out.</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Component</th><th>What it sees</th><th>Can decrypt?</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>browser (both ends)</td><td>plaintext + the words</td><td class="yes">yes — it's the owner</td></tr>
+          <tr><td>backend</td><td>ciphertext stream, id, salt</td><td class="no">no</td></tr>
+          <tr><td>Redis</td><td>id → {s3_key, salt, encName}</td><td class="no">no — no key, name is ciphertext</td></tr>
+          <tr><td>S3</td><td>encrypted blob only</td><td class="no">no</td></tr>
+          <tr><td>operator (you)</td><td>all of the above at once</td><td class="no">no — genuinely can't</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <p><b>The honest weak point: a 4-word phrase is brute-forceable here.</b> Magic-wormhole survives on
+        four words because its live PAKE handshake gives an attacker exactly one guess before the channel dies.
+        This design is store-and-forward — the ciphertext sits in S3 for 24 hours, so guessing can happen offline
+        and at scale.</p>
+      <p>Mitigation, chosen deliberately: <b>6 words</b> for entropy, <b>Argon2id</b> to make each guess
+        expensive, and a <b>Redis-backed rate limit</b> on the lookup endpoint so the <code>id</code> can't be
+        hammered. Secret strength is a real security parameter in this system, not a UX detail.</p>
+    </div>
+  </section>
+
+  <section id="topology">
+    <p class="eyebrow">Topology</p>
+    <h2>Homelab is free baseline; AWS is rented burst</h2>
+    <p>Because the backend is stateless — all shared state lives in Redis and S3 — any instance can serve
+      any request. That's the precondition for scaling out. The homelab runs the baseline for free; identical
+      EC2 backends spin up only when the pipe saturates, and stop when it drains.</p>
+
+    <div class="diagram"><pre>          browser  <span class="mut">(encrypts / decrypts — holds the words)</span>
+             │  ciphertext only, over HTTPS
+             ▼
+ ┌─ <b>VPS</b> · NixOS · always-on anchor ─────────────────────────┐
+ │   <b>nginx</b>   upstream wormhole_backends {                    │
+ │             include /var/lib/wormhole/upstreams.conf; <span class="mut">◄─┐</span>    │
+ │           }                                          <span class="mut">│</span>    │
+ │   <b>autoscaler</b> (systemd, Rust) ─── owns this file ─────<span class="mut">┘</span>    │
+ │     scrape /metrics · aws ec2 start|stop · nginx -s reload  │
+ │   <b>Redis</b>   id → {s3_key, salt, encName}   <span class="mut">TTL 24h</span>          │
+ └──────┬───────────────────────────────┬─────────────────────┘
+   wireguard                        wireguard
+        ▼                                ▼
+   <b>homelab backend</b>                  <b>EC2 backend(s)</b>  <span class="mut">← burst only</span>
+   <span class="mut">IAM user key (agenix)</span>            <span class="mut">IAM instance role · baked AMI</span>
+        └────────────────┬───────────────┘
+                stream <b>ciphertext</b>
+                         ▼
+                  private <b>S3</b> bucket   <span class="mut">· 24h lifecycle expiry</span></pre></div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="role">edge · always on</div>
+        <h4>VPS (NixOS)</h4>
+        <p>Serves the static React app, terminates TLS on <code>*.dwiesta.pro</code>, load-balances the backend
+          pool, and hosts Redis. The one box that sees everything and is never the thing under stress.</p>
+      </div>
+      <div class="card">
+        <div class="role">router</div>
+        <h4>nginx + mutable include</h4>
+        <p>Nix declares the structure; a single <code>include</code>d file lists the live backends. Everything
+          stays declarative except the one line-list that is inherently runtime state.</p>
+      </div>
+      <div class="card">
+        <div class="role">controller</div>
+        <h4>autoscaler</h4>
+        <p>A small Rust systemd unit — not a microservice. A loop: read concurrency, cross a threshold,
+          call the AWS SDK, rewrite the include, reload nginx. Scales on connections, not CPU.</p>
+      </div>
+      <div class="card">
+        <div class="role">metadata</div>
+        <h4>Redis</h4>
+        <p>Maps an anonymous hash to an opaque, encrypted pointer with a 24-hour TTL that auto-expires the
+          record. Also holds the lookup rate-limit counters. Never holds a key or a plaintext name.</p>
+      </div>
+      <div class="card">
+        <div class="role">compute · baseline</div>
+        <h4>homelab backend</h4>
+        <p>The identical Axum binary, run for free. Streams ciphertext to and from S3 using a tightly-scoped
+          IAM user key stored with agenix, alongside your existing secrets.</p>
+      </div>
+      <div class="card">
+        <div class="role">compute · burst</div>
+        <h4>EC2 backend(s)</h4>
+        <p>The same binary from a baked AMI, started on demand. Uses an IAM instance role — zero secrets to
+          ship, credentials rotate automatically. Joins the WireGuard mesh and the nginx pool, then stops.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="scaling">
+    <p class="eyebrow">Autoscaling</p>
+    <h2>nginx doesn't scale — a controller beside it does</h2>
+    <p>nginx is a reliable, dumb router; it has no idea how to start an EC2 instance or edit its own backend
+      list. So the intelligence is a separate loop that <em>manages</em> nginx. And because the config is
+      generated by Nix and lives read-only in the store, the loop can't hand-edit it — the seam is a single
+      mutable file that Nix <code>include</code>s but never owns.</p>
+
+    <figure class="term">
+      <div class="term-bar">
+        <span class="lights"><i class="l1"></i><i class="l2"></i><i class="l3"></i></span>
+        <span class="title">autoscaler · loop</span>
+      </div>
+      <div class="term-body"><pre><span class="kw">loop</span> {
+    <span class="vr">load</span> = <span class="kw">sum</span>(scrape <span class="vr">/metrics</span> from every backend)   <span class="cm"># in-flight connections</span>
+
+    <span class="kw">if</span> load &gt; THRESHOLD <span class="kw">and</span> room_to_grow {
+        aws ec2 <span class="kw">start-instances</span>  i-xxxx
+        <span class="kw">wait</span> reachable over wireguard
+        <span class="kw">append</span> "server &lt;ip&gt;:8080;" <span class="ar">→</span> upstreams.conf
+        nginx -s <span class="kw">reload</span>                            <span class="cm"># graceful, no dropped conns</span>
+    }
+    <span class="kw">if</span> load &lt; LOW <span class="kw">for</span> cooldown {
+        <span class="kw">remove</span> that line <span class="ar">→</span> upstreams.conf ; nginx -s reload
+        aws ec2 <span class="kw">stop-instances</span>  i-xxxx
+    }
+    <span class="kw">sleep</span> 15s
+}</pre></div>
+
+    <div class="note">
+      <p><b>The scaling story is deliberately modest, and that's stated honestly.</b> Client-side encryption
+        turns the backend into a pure byte pipe, so it saturates on <b>bandwidth and connection count</b>, not
+        CPU. That's exactly why the scale trigger is concurrent connections rather than CPU percent — the metric
+        matches the real bottleneck instead of a borrowed SRE default.</p>
+    </div>
+  </section>
+
+  <section id="cost">
+    <p class="eyebrow">Cost & data path</p>
+    <h2>Where the money actually goes</h2>
+    <ul class="clean">
+      <li><strong>Compute is the only real spend.</strong> Homelab baseline is free; you pay EC2 instance-hours
+        only during bursts, then <code>stop-instances</code> ends the meter.</li>
+      <li><strong>S3 is pennies.</strong> Encrypted blobs with a 24-hour lifecycle rule never accumulate;
+        ingress is free, and same-region EC2→S3 egress is free.</li>
+      <li><strong>No presigned URLs.</strong> Bytes stream through the backend by choice, so the browser never
+        holds a direct-to-S3 link — the bucket stays fully private, reachable only by IAM-signed calls.</li>
+      <li><strong>Redis stays in the megabytes forever</strong> — it holds a few hundred bytes of ciphertext
+        pointer per file, never the file itself.</li>
+    </ul>
+  </section>
+
+  <section id="build">
+    <p class="eyebrow">Delivery</p>
+    <h2>Build order — working demo first</h2>
+    <ol class="phases">
+      <li>
+        <div class="pt">Core loop, homelab only <span class="tag">a working app</span></div>
+        <div class="pd">React encrypt/decrypt ↔ Axum streams ciphertext ↔ S3 ↔ Redis mapping ↔ word
+          generation & lookup ↔ 24h expiry. End-to-end zero-knowledge, one backend.</div>
+      </li>
+      <li>
+        <div class="pt">Put the edge in front</div>
+        <div class="pd">nginx <code>include</code> seam + <code>share.dwiesta.pro</code> vhost in Nix, homelab
+          registered in the pool, WireGuard verified, Redis declared in Nix.</div>
+      </li>
+      <li>
+        <div class="pt">Prove balancing</div>
+        <div class="pd">Backend exposes <code>/metrics</code>; add one manually-started EC2 backend to the pool
+          and confirm requests balance across homelab + cloud.</div>
+      </li>
+      <li>
+        <div class="pt">Automate the burst</div>
+        <div class="pd">Autoscaler start/stop + upstream rewrite + cooldown. Bake the AMI. Terraform it so the
+          whole AWS side is reproducible.</div>
+      </li>
+      <li>
+        <div class="pt">Chunked streaming encryption <span class="tag">phase 2</span></div>
+        <div class="pd">Lift the ~100&nbsp;MB cap: per-chunk nonces and streamed AES-GCM so multi-gigabyte
+          files never exhaust the tab.</div>
+      </li>
+    </ol>
+  </section>
+
+</div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>share.dwiesta.pro · architecture</span>
+    <span>client-side keys · homelab baseline · aws burst</span>
+  </div>
+</footer>
+</body>
+</html>

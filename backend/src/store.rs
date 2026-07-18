@@ -48,3 +48,22 @@ pub async fn check_lookup_limit(state: &AppState, who: &str) -> Result<(), ApiEr
     }
     Ok(())
 }
+
+// Per-IP limit for the public /api/benchmark endpoint. High enough to run a
+// 100-concurrency test, low enough to blunt sustained spam that could flap the
+// autoscaler / rack up EC2 hours.
+const BENCH_LIMIT: u32 = 200;
+const BENCH_WINDOW_SECS: i64 = 60;
+
+pub async fn check_benchmark_limit(state: &AppState, who: &str) -> Result<(), ApiError> {
+    let mut conn = state.redis.clone();
+    let key = format!("wh:brl:{who}");
+    let count: u32 = conn.incr(&key, 1).await?;
+    if count == 1 {
+        let _: () = conn.expire(&key, BENCH_WINDOW_SECS).await?;
+    }
+    if count > BENCH_LIMIT {
+        return Err(ApiError::RateLimited);
+    }
+    Ok(())
+}
