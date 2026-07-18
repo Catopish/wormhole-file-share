@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/upload", post(handlers::upload))
         .route("/api/lookup", post(handlers::lookup))
         .route("/api/download/:id", get(handlers::download))
-        .route("/api/benchmark", post(handlers::benchmark))
+        .route("/api/stats", get(handlers::stats))
         .layer(DefaultBodyLimit::max(max_body))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())

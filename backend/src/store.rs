@@ -14,6 +14,23 @@ pub struct Record {
     pub size: u64,
 }
 
+// Persistent "served by" tally. Each backend bumps its own counter on every
+// upload/download it handles; a durable INCR in Redis so it survives restarts
+// and reflects the whole fleet's history. Keyed by node name.
+pub async fn bump_served(state: &AppState) {
+    let mut conn = state.redis.clone();
+    let key = format!("wh:stats:served:{}", state.cfg.node_name);
+    // Fire-and-forget: a stats miss must never fail a real request.
+    let _: Result<i64, _> = conn.incr(&key, 1).await;
+}
+
+pub async fn get_served(state: &AppState) -> (i64, i64) {
+    let mut conn = state.redis.clone();
+    let homelab: i64 = conn.get("wh:stats:served:homelab").await.unwrap_or(0);
+    let ec2: i64 = conn.get("wh:stats:served:ec2").await.unwrap_or(0);
+    (homelab, ec2)
+}
+
 fn meta_key(id: &str) -> String {
     format!("wh:file:{id}")
 }
@@ -44,25 +61,6 @@ pub async fn check_lookup_limit(state: &AppState, who: &str) -> Result<(), ApiEr
         let _: () = conn.expire(&key, state.cfg.lookup_window_secs as i64).await?;
     }
     if count > state.cfg.lookup_limit {
-        return Err(ApiError::RateLimited);
-    }
-    Ok(())
-}
-
-// Per-IP limit for the public /api/benchmark endpoint. High enough to run a
-// 100-concurrency test, low enough to blunt sustained spam that could flap the
-// autoscaler / rack up EC2 hours.
-const BENCH_LIMIT: u32 = 200;
-const BENCH_WINDOW_SECS: i64 = 60;
-
-pub async fn check_benchmark_limit(state: &AppState, who: &str) -> Result<(), ApiError> {
-    let mut conn = state.redis.clone();
-    let key = format!("wh:brl:{who}");
-    let count: u32 = conn.incr(&key, 1).await?;
-    if count == 1 {
-        let _: () = conn.expire(&key, BENCH_WINDOW_SECS).await?;
-    }
-    if count > BENCH_LIMIT {
         return Err(ApiError::RateLimited);
     }
     Ok(())

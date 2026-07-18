@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Send from "./Send.jsx";
 import Receive from "./Receive.jsx";
-import Burst from "./Burst.jsx";
+import Stats from "./Stats.jsx";
 
 export default function App() {
   const [tab, setTab] = useState("send");
@@ -31,18 +31,11 @@ export default function App() {
         >
           receive
         </button>
-        <button
-          role="tab"
-          aria-selected={tab === "burst"}
-          onClick={() => setTab("burst")}
-        >
-          burst
-        </button>
       </div>
 
-      {tab === "send" && <Send />}
-      {tab === "receive" && <Receive />}
-      {tab === "burst" && <Burst />}
+      {tab === "send" ? <Send /> : <Receive />}
+
+      <Stats />
 
       <p className="footlinks">
         <a href="/docs/">architecture &amp; how it works →</a>

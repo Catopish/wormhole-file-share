@@ -37,37 +37,12 @@ pub async fn metrics(State(state): State<AppState>) -> impl IntoResponse {
     format!("inflight {inflight}\n")
 }
 
-// Load-test endpoint for the burst simulator. Registers in-flight load exactly
-// like a real upload (so the autoscaler bursts), but DRAINS AND DISCARDS the
-// body — nothing is written to S3 or Redis. Reports which node served it so the
-// UI can show homelab-vs-ec2 split. Rate-limited per IP to blunt abuse.
-pub async fn benchmark(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    body: Body,
-) -> Result<Response, ApiError> {
-    let _guard = InflightGuard::new(&state);
-
-    store::check_benchmark_limit(&state, &client_ip(&headers)).await?;
-
-    // Drain the body (up to the cap) and throw it away — this exercises the
-    // network path and holds the connection, without persisting anything.
-    let _ = axum::body::to_bytes(body, state.cfg.max_upload_bytes as usize)
-        .await
-        .map_err(|_| ApiError::TooLarge)?;
-
-    // Hold the in-flight slot briefly so concurrent requests actually overlap
-    // and the autoscaler sees real load — otherwise tiny requests complete too
-    // fast to accumulate concurrency.
-    tokio::time::sleep(std::time::Duration::from_millis(750)).await;
-
-    let node = state.cfg.node_name.clone();
-    Ok((
-        [("x-served-by", node.clone())],
-        Json(json!({ "served_by": node })),
-    )
-        .into_response())
+// Public fleet stats: how many transfers each backend has served, ever.
+pub async fn stats(State(state): State<AppState>) -> impl IntoResponse {
+    let (homelab, ec2) = store::get_served(&state).await;
+    Json(json!({ "homelab": homelab, "ec2": ec2 }))
 }
+
 
 // Client sends the opaque bits as headers; the body is the raw ciphertext
 // stream. The server understands none of it.
@@ -114,8 +89,15 @@ pub async fn upload(
 
     // Only after the blob lands do we publish the pointer.
     store::put_record(&state, &id, &Record { s3_key, salt, enc_name, size }).await?;
+    store::bump_served(&state).await;
 
-    Ok((StatusCode::CREATED, Json(json!({ "id": id }))).into_response())
+    // X-Served-By lets the UI show which backend (homelab/ec2) handled it.
+    Ok((
+        StatusCode::CREATED,
+        [("x-served-by", state.cfg.node_name.clone())],
+        Json(json!({ "id": id })),
+    )
+        .into_response())
 }
 
 #[derive(Deserialize)]
@@ -165,10 +147,12 @@ pub async fn download(
 
     let stream = tokio_util::io::ReaderStream::new(obj.body.into_async_read());
     let body = Body::from_stream(stream);
+    store::bump_served(&state).await;
 
     Ok(([
         (header::CONTENT_TYPE, "application/octet-stream".to_string()),
         (header::CONTENT_LENGTH, rec.size.to_string()),
+        (header::HeaderName::from_static("x-served-by"), state.cfg.node_name.clone()),
     ], body)
         .into_response())
 }
