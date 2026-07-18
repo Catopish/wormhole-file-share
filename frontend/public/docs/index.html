@@ -135,6 +135,23 @@
   }
   .chip b { color: var(--accent-ink); font-weight: 600; }
 
+  .cta-row { margin-top: 28px; }
+  .cta {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    padding: 11px 20px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: #04201c;
+    text-decoration: none;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .cta:hover { filter: brightness(1.06); transform: translateY(-1px); }
+  .cta:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
+
   /* ---------- sections ---------- */
   main .wrap { padding-top: 8px; padding-bottom: 8px; }
   section { padding: 46px 0; border-bottom: 1px solid var(--line-soft); }
@@ -354,11 +371,12 @@
 
 <header class="masthead">
   <div class="wrap">
-    <div class="kicker"><span class="dot"></span> Architecture&nbsp;·&nbsp;zero-knowledge file sharing</div>
+    <div class="kicker"><span class="dot"></span> Architecture&nbsp;·&nbsp;zero-knowledge file sharing&nbsp;·&nbsp;live</div>
     <h1>wormhole<span class="tld">&nbsp;· share.dwiesta.pro</span></h1>
-    <p class="standfirst">A wormhole-style file drop where the four-word phrase is the only key —
+    <p class="standfirst">A wormhole-style file drop where a six-word phrase is the only key —
       it never leaves the browser, so the servers, the storage, and the operator all hold nothing but ciphertext.
-      Homelab carries the baseline load for free; AWS is rented only when the pipe is full.</p>
+      A homelab carries the baseline load for free; AWS EC2 is rented only when the pipe is full. Running now on a
+      NixOS VPS, a homelab over WireGuard, and a private S3 bucket.</p>
     <div class="metastrip">
       <span class="chip"><b>client-side</b> AES-256-GCM</span>
       <span class="chip"><b>Argon2id</b> KDF</span>
@@ -368,6 +386,9 @@
       <span class="chip">NixOS · <b>nginx</b></span>
       <span class="chip">homelab → <b>EC2 burst</b></span>
     </div>
+    <div class="cta-row">
+      <a class="cta" href="/">Try the live app&nbsp;→</a>
+    </div>
   </div>
 </header>
 
@@ -376,7 +397,7 @@
 
   <section id="thesis">
     <p class="eyebrow">The property</p>
-    <h2>The four words are the whole secret</h2>
+    <h2>The six words are the whole secret</h2>
     <p class="lead">Everything follows from one rule: the encryption key is derived from the mnemonic
       <em>in the browser</em>, and the words are never transmitted. Upload sends ciphertext and a one-way
       hash; download re-derives the key from the same words locally. No component in the middle can read a file —
@@ -448,7 +469,7 @@
     </div>
 
     <div class="note">
-      <p><b>The honest weak point: a 4-word phrase is brute-forceable here.</b> Magic-wormhole survives on
+      <p><b>The honest weak point: a short phrase is brute-forceable here.</b> Magic-wormhole survives on
         four words because its live PAKE handshake gives an attacker exactly one guess before the channel dies.
         This design is store-and-forward — the ciphertext sits in S3 for 24 hours, so guessing can happen offline
         and at scale.</p>
@@ -577,36 +598,75 @@
     </ul>
   </section>
 
-  <section id="build">
-    <p class="eyebrow">Delivery</p>
-    <h2>Build order — working demo first</h2>
+  <section id="status">
+    <p class="eyebrow">Status</p>
+    <h2>Live — and the autoscaler is proven</h2>
+    <p>This isn't a plan; it's running. <code>share.dwiesta.pro</code> serves the real app, and every
+      piece of the architecture above is deployed on live infrastructure — a NixOS VPS in Jakarta, a
+      homelab backend over WireGuard, a private S3 bucket, and an EC2 burst instance the autoscaler
+      manages.</p>
+
     <ol class="phases">
       <li>
-        <div class="pt">Core loop, homelab only <span class="tag">a working app</span></div>
-        <div class="pd">React encrypt/decrypt ↔ Axum streams ciphertext ↔ S3 ↔ Redis mapping ↔ word
-          generation & lookup ↔ 24h expiry. End-to-end zero-knowledge, one backend.</div>
+        <div class="pt">Zero-knowledge core <span class="tag">live</span></div>
+        <div class="pd">Browser encrypts file + filename, streams ciphertext through the backend to S3,
+          Redis holds the hashed pointer with a 24h TTL. Verified end to end against real S3.</div>
       </li>
       <li>
-        <div class="pt">Put the edge in front</div>
-        <div class="pd">nginx <code>include</code> seam + <code>share.dwiesta.pro</code> vhost in Nix, homelab
-          registered in the pool, WireGuard verified, Redis declared in Nix.</div>
+        <div class="pt">Hybrid edge over WireGuard <span class="tag">live</span></div>
+        <div class="pd">nginx on the VPS load-balances an <code>include</code>-based pool; the homelab backend
+          joins over the WireGuard mesh; Redis is reachable only on the tunnel interface.</div>
       </li>
       <li>
-        <div class="pt">Prove balancing</div>
-        <div class="pd">Backend exposes <code>/metrics</code>; add one manually-started EC2 backend to the pool
-          and confirm requests balance across homelab + cloud.</div>
+        <div class="pt">Autoscaler bursting to EC2 <span class="tag">verified</span></div>
+        <div class="pd">Under real load the autoscaler starts a stopped EC2 instance
+          (<strong>~18s cold start</strong>), waits for its health check, rewrites the nginx upstream, and
+          serves across both — then stops the instance after a cooldown. Watched live, start to stop.</div>
       </li>
       <li>
-        <div class="pt">Automate the burst</div>
-        <div class="pd">Autoscaler start/stop + upstream rewrite + cooldown. Bake the AMI. Terraform it so the
-          whole AWS side is reproducible.</div>
-      </li>
-      <li>
-        <div class="pt">Chunked streaming encryption <span class="tag">phase 2</span></div>
-        <div class="pd">Lift the ~100&nbsp;MB cap: per-chunk nonces and streamed AES-GCM so multi-gigabyte
-          files never exhaust the tab.</div>
+        <div class="pt">Persistent served-by counter <span class="tag">live</span></div>
+        <div class="pd">Every real transfer bumps a durable Redis tally of which backend handled it. The
+          site shows the running total — homelab vs AWS burst — so the fleet's history is visible and
+          survives restarts.</div>
       </li>
     </ol>
+  </section>
+
+  <section id="learned">
+    <p class="eyebrow">The honest finding</p>
+    <h2>This workload is network-bound, not compute-bound</h2>
+    <p class="lead">The most useful result of building the autoscaler was learning <em>when it helps</em> —
+      and concluding, for this system, that it mostly doesn't.</p>
+
+    <p>The backend is the lightest possible layer: it relays already-encrypted bytes to S3 and stores a
+      small pointer. All the real compute (AES-256-GCM encryption) happens in the browser; all the storage
+      is S3. So there is no CPU-heavy work for a second machine to take off the first. The bottleneck under
+      load is always <strong>network</strong> — the client's uplink, or the single receiving backend's
+      bandwidth — never backend CPU. And you can't relieve a network bottleneck by adding another backend
+      behind the same edge.</p>
+
+    <div class="note">
+      <p><b>A queue wouldn't fix it either.</b> The tempting next step — a Redis job queue so a late-arriving
+        EC2 worker could pull backlog — was designed and then rejected: the only distributable work would be
+        an S3-to-S3 copy (milliseconds, no bytes through the worker). The queue would move "nothing" around.
+        The bytes still have to be received by one backend first, and that receive is the actual cost.</p>
+      <p>So the autoscaler stands as a <b>demonstrated capability</b>, not a load-bearing necessity — which is
+        a more honest engineering outcome than pretending a thin relay needs horizontal compute scaling.</p>
+    </div>
+  </section>
+
+  <section id="next">
+    <p class="eyebrow">Known limits</p>
+    <h2>What's left, honestly</h2>
+    <ul class="clean">
+      <li><strong>~100&nbsp;MB cap.</strong> Files are encrypted in one pass in the browser. Lifting it needs
+        chunked streaming encryption (per-chunk nonces) so multi-gigabyte files don't exhaust the tab.</li>
+      <li><strong>Single-client load can't saturate the fleet.</strong> One home browser's uplink caps out
+        before the backend does, so a lone user can't produce the distributed load where burst would matter —
+        which is exactly why the network-bound finding above holds.</li>
+      <li><strong>The burst is elastic but optional.</strong> The scale threshold is a knob; set high, the
+        autoscaler stays dormant and costs nothing but a stopped instance's disk.</li>
+    </ul>
   </section>
 
 </div>
@@ -614,7 +674,7 @@
 
 <footer>
   <div class="wrap">
-    <span>share.dwiesta.pro · architecture</span>
+    <span><a href="/">share.dwiesta.pro</a> · architecture</span>
     <span>client-side keys · homelab baseline · aws burst</span>
   </div>
 </footer>
