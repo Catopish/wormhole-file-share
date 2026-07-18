@@ -56,6 +56,11 @@ pub async fn benchmark(
         .await
         .map_err(|_| ApiError::TooLarge)?;
 
+    // Hold the in-flight slot briefly so concurrent requests actually overlap
+    // and the autoscaler sees real load — otherwise tiny requests complete too
+    // fast to accumulate concurrency.
+    tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+
     let node = state.cfg.node_name.clone();
     Ok((
         [("x-served-by", node.clone())],

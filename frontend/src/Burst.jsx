@@ -1,22 +1,15 @@
 import { useState, useRef } from "react";
 import { benchmark } from "./api.js";
 
-const MB = 1024 * 1024;
-const PAYLOAD_SIZE = 5 * MB;
-
-// One shared 5MB buffer reused for every request — avoids allocating
-// N × 5MB when firing 100 concurrent. Built lazily on first run:
-// crypto.getRandomValues throws above 65536 bytes, so fill in chunks. (The
-// bytes don't need to be random for a load test — zeros are fine — but we
-// fill once to be representative.)
-let payload = null;
+// Small body on purpose: the goal is to create many CONCURRENT in-flight
+// requests on the backend (which is what the autoscaler measures), NOT to
+// saturate the client's uplink. A 5MB body × 60 concurrent = 300MB out of the
+// browser, which just maxes the home uplink and trickles requests through — the
+// server then sees almost no concurrency. A tiny body lets requests fire fast
+// and pile up, so `load` actually climbs. The server holds each open briefly.
+const PAYLOAD_SIZE = 16 * 1024; // 16 KB
+const payload = crypto.getRandomValues(new Uint8Array(PAYLOAD_SIZE));
 function getPayload() {
-  if (payload) return payload;
-  payload = new Uint8Array(PAYLOAD_SIZE);
-  const CHUNK = 65536;
-  for (let off = 0; off < PAYLOAD_SIZE; off += CHUNK) {
-    crypto.getRandomValues(payload.subarray(off, Math.min(off + CHUNK, PAYLOAD_SIZE)));
-  }
   return payload;
 }
 
@@ -79,7 +72,7 @@ export default function Burst() {
     <div className="card">
       <div className="field">
         <label htmlFor="conc">
-          concurrency — {concurrency} parallel 5MB requests
+          concurrency — {concurrency} parallel requests
         </label>
         <input
           id="conc"

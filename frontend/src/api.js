@@ -36,17 +36,26 @@ export async function download(id) {
 
 // Load-test request. Sends `bytes` to the drain-and-discard endpoint and
 // returns which node served it ("homelab" / "ec2"). Nothing is stored.
-export async function benchmark(bytes) {
-  const res = await fetch(`${BASE}/benchmark`, {
-    method: "POST",
-    headers: { "content-type": "application/octet-stream" },
-    body: bytes,
-  });
-  if (res.status === 429) throw new Error("rate limited");
-  if (!res.ok) throw new Error(`benchmark failed (${res.status})`);
-  const served =
-    res.headers.get("x-served-by") || (await res.json()).served_by || "unknown";
-  return served;
+export async function benchmark(bytes, timeoutMs = 20000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${BASE}/benchmark`, {
+      method: "POST",
+      headers: { "content-type": "application/octet-stream" },
+      body: bytes,
+      signal: ctrl.signal,
+    });
+    if (res.status === 429) throw new Error("rate limited");
+    if (!res.ok) throw new Error(`benchmark failed (${res.status})`);
+    // Prefer the header (available without reading the body).
+    const served = res.headers.get("x-served-by");
+    // Drain the (tiny) response so the connection frees for reuse.
+    await res.text();
+    return served || "unknown";
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 async function errMsg(res) {
